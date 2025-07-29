@@ -1,0 +1,6 @@
+# ninja log v5
+1	22408	1749691079162310400	/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/对比模型/FEMCD-main/models/encoders/selective_scan/build/temp.linux-x86_64-cpython-310/csrc/selective_scan/selective_scan.o	170dfff2c7b6ef34
+2	25599	1749691082335387500	/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/对比模型/FEMCD-main/models/encoders/selective_scan/build/temp.linux-x86_64-cpython-310/csrc/selective_scan/selective_scan_core_fwd2.o	a8c57a6ef33c3c12
+2	34067	1749691090790263800	/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/对比模型/FEMCD-main/models/encoders/selective_scan/build/temp.linux-x86_64-cpython-310/csrc/selective_scan/selective_scan_core_fwd3.o	782bce132570e0b4
+2	44758	1749691101473471800	/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/对比模型/FEMCD-main/models/encoders/selective_scan/build/temp.linux-x86_64-cpython-310/csrc/selective_scan/selective_scan_core_fwd4.o	a20c5681c94affa4
+1	66798	1749691123525189800	/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/对比模型/FEMCD-main/models/encoders/selective_scan/build/temp.linux-x86_64-cpython-310/csrc/selective_scan/selective_scan_core.o	4dae1d81c029abbe
