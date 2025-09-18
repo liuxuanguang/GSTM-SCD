@@ -33,14 +33,14 @@ class Options:
     def __init__(self):
         parser = argparse.ArgumentParser('Semantic Change Detection')
         parser.add_argument("--data_name", type=str, default="DynamicEarth")
-        parser.add_argument("--Net_name", type=str, default="GSTMSCD-随机时相")
+        parser.add_argument("--Net_name", type=str, default="GSTMSCD")
         parser.add_argument("--lightweight", dest="lightweight", action="store_true",
                             help='lightweight head for fewer parameters and faster speed')
         parser.add_argument("--backbone", type=str, default="resnet34")
         parser.add_argument("--data_root", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/语义变化检测数据集/DynamicEarthNet_4band/随机时相测试")
+                            default=r"/DynamicEarthNet")
         parser.add_argument("--load_from", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/checkpoints/DynamicEarth/DynamicEarthNet对比权重/GSTM_trainrandom_epoch78_Score36.84_mIOU72.22_Sek21.68_Fscd63.80_OA87.08.pth")
+                            default=r"best_model.pth")
         parser.add_argument("--test_batch_size", type=int, default=4)
         parser.add_argument("--pretrained", type=bool, default=True,
                             help='initialize the backbone with pretrained parameters')
@@ -60,12 +60,8 @@ def inference_ss(args, pair):
     begin_time = time.time()
     working_path = os.path.dirname(os.path.abspath(__file__))
     pred_dir = os.path.join(working_path, 'pred_results', args.data_name, args.Net_name, args.backbone)
-
-    # 为所有语义分割预测创建一个目录
     semantic_dir = os.path.join(pred_dir, 'semantic_predictions')
     os.makedirs(semantic_dir, exist_ok=True)
-
-    # 为每个时相创建子目录
     for i in range(1, 7):
         time_dir = os.path.join(semantic_dir, f'time_{i}')
         os.makedirs(time_dir, exist_ok=True)
@@ -80,8 +76,7 @@ def inference_ss(args, pair):
 
     model = model.cuda()
     model.eval()
-
-    # 计算参数量和FLOPs
+    
     if args.test_batch_size > 0:
         for vi, data in enumerate(testloader):
             if vi == 0:
@@ -99,10 +94,7 @@ def inference_ss(args, pair):
             # img1, img2, img3, img4, img5, img6 = img1.cuda(), img2.cuda(), img3.cuda(), img4.cuda(), img5.cuda(), img6.cuda()
             out1, out2, out3, out4, out5, out6, out_bn = model(img1, img2, img3, img4, img5, img6, pair)
 
-            # 直接获取预测结果，避免不必要的张量复制
             outputs = [torch.argmax(out, dim=1).cpu().numpy() for out in [out1, out2, out3, out4, out5, out6]]
-
-            # 保存所有时相的语义分割结果
             for time_idx in range(6):
                 time_dir = os.path.join(semantic_dir, f'time_{time_idx + 1}')
                 for i in range(outputs[0].shape[0]):
@@ -114,11 +106,9 @@ def inference_scd(args, pair):
     working_path = os.path.dirname(os.path.abspath(__file__))
     pred_dir = os.path.join(working_path, 'pred_results', args.data_name, args.Net_name, args.backbone)
 
-    # 为当前时相对创建一个目录
     pair_dir = os.path.join(pred_dir, f'pair_{pair[0]+1}{pair[1]+1}')
     os.makedirs(pair_dir, exist_ok=True)
 
-    # 创建保存路径
     pred_save_path1 = os.path.join(pair_dir, 'pred_semantic_time1')
     pred_save_path2 = os.path.join(pair_dir, 'pred_semantic_time2')
     pred_save_pathcd = os.path.join(pair_dir, 'change_map')
@@ -147,21 +137,17 @@ def inference_scd(args, pair):
             # img1, img2, img3, img4, img5, img6 = img1.cuda(), img2.cuda(), img3.cuda(), img4.cuda(), img5.cuda(), img6.cuda()
             out1, out2, out3, out4, out5, out6, out_bn = model(img1, img2, img3, img4, img5, img6, pair)
 
-            # 直接获取预测结果，避免不必要的张量复制
             seg_predictions = [torch.argmax(out, dim=1).cpu().numpy() for out in [out1, out2, out3, out4, out5, out6]]
             change_prediction = (out_bn > 0.5).cpu().numpy().astype(np.uint8)
 
-            # 只处理相关时相的预测结果
             time1_pred = seg_predictions[pair[0]]
             time2_pred = seg_predictions[pair[1]]
 
-            # 应用二值变化掩码
             time1_pred_masked = time1_pred.copy()
             time2_pred_masked = time2_pred.copy()
             time1_pred_masked[change_prediction == 0] = 0
             time2_pred_masked[change_prediction == 0] = 0
-
-            # 转换标签为numpy数组
+            
             labels_np = {
                 'time1': label1.numpy() if pair[0] == 0 else
                 label2.numpy() if pair[0] == 1 else
@@ -178,38 +164,30 @@ def inference_scd(args, pair):
                 'change': label_bn.numpy()
             }
 
-            # 应用真实变化掩码到标签
             time1_gt_masked = labels_np['time1'].copy()
             time2_gt_masked = labels_np['time2'].copy()
             time1_gt_masked[labels_np['change'] == 0] = 0
             time2_gt_masked[labels_np['change'] == 0] = 0
 
-            # 添加到指标计算
             metric.add_batch(time1_pred_masked, time1_gt_masked)
             metric.add_batch(time2_pred_masked, time2_gt_masked)
 
-            # 保存预测结果
             for idx in range(time1_pred.shape[0]):
-                # 保存语义变化图1
                 mask1 = Image.fromarray(time1_pred_masked[idx].astype(np.uint8)).convert('P')
                 mask1.putpalette(cmap)
                 mask1.save(os.path.join(pred_save_path1, id[idx]))
 
-                # 保存语义变化图2
                 mask2 = Image.fromarray(time2_pred_masked[idx].astype(np.uint8)).convert('P')
                 mask2.putpalette(cmap)
                 mask2.save(os.path.join(pred_save_path2, id[idx]))
-
-                # 保存二值变化图
+                
                 change_img = Image.fromarray(change_prediction[idx] * 255)
                 change_img.save(os.path.join(pred_save_pathcd, id[idx]))
 
-        # 计算指标
         change_ratio, OA, mIoU, Sek, Fscd, Score, Precision_scd, Recall_scd = metric.evaluate_inference()
         print(f'时相T{pair[0]+1}-T{pair[1]+1}预测完成')
         time_use = time.time() - begin_time
 
-    # 保存当前时相组合的指标
     metric_file = os.path.join(pair_dir, 'metrics.txt')
     with open(metric_file, 'w', encoding='utf-8') as f:
         f.write("##################### Pair Metrics #####################\n")
@@ -224,7 +202,6 @@ def inference_scd(args, pair):
         f.write("Precision_scd (%): " + str(round(Precision_scd * 100, 2)) + '\n')
         f.write("Recall_scd (%): " + str(round(Recall_scd * 100, 2)) + '\n')
 
-    # 返回指标用于后续计算平均值
     return {
         'pair': (pair[0], pair[1]),
         'time_use': time_use,
@@ -240,29 +217,24 @@ def inference_scd(args, pair):
 
 
 def calculate_global_metrics(all_metrics, pred_dir):
-    """计算所有时相组合的平均指标"""
+    """Calculate the average metrics for all phase combinations"""
     if not all_metrics:
         print("没有指标可用于计算全局平均值")
         return
 
-    # 初始化指标求和
     metrics_sum = collections.defaultdict(float)
 
-    # 计算指标总和
     for metrics in all_metrics:
         for key in metrics:
             if key != 'pair' and key != 'time_use':  # 排除特殊键
                 metrics_sum[key] += metrics[key]
 
-    # 计算平均值
     num_pairs = len(all_metrics)
     avg_metrics = {key: metrics_sum[key] / num_pairs for key in metrics_sum}
-
-    # 添加平均推理时间
+    
     total_time = sum(metrics['time_use'] for metrics in all_metrics)
     avg_time = total_time / num_pairs if num_pairs > 0 else 0
 
-    # 保存全局指标
     global_metric_file = os.path.join(pred_dir, 'global_metrics.txt')
     with open(global_metric_file, 'w', encoding='utf-8') as f:
         f.write("##################### Global Metrics #####################\n")
@@ -285,17 +257,15 @@ def calculate_global_metrics(all_metrics, pred_dir):
 
     print(f"全局指标已保存到: {global_metric_file}")
 
-
 if __name__ == "__main__":
     args = Options().parse()
     working_path = os.path.dirname(os.path.abspath(__file__))
     pred_dir = os.path.join(working_path, 'pred_results', args.data_name, args.Net_name, args.backbone)
     os.makedirs(pred_dir, exist_ok=True)
 
-    # 收集所有指标
     all_metrics = []
 
-    # 处理所有时相对
+    # Process all phases
     for i in range(6):
         for j in range(6):
             if i == 0 and j == 0:
@@ -314,7 +284,6 @@ if __name__ == "__main__":
             else:
                 continue
 
-    # 计算并保存全局指标
     if all_metrics:
         calculate_global_metrics(all_metrics, pred_dir)
 # import os
