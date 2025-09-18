@@ -1,7 +1,10 @@
 # GSTM-SCD
 Pytorch codes of **GSTM-SCD: Graph-enhanced spatio-temporal state space model for semantic change detection in multi-temporal remote sensing images** [[paper](https://doi.org/10.1016/j.isprsjprs.2025.09.003)]
 
-![Fig2]()
+## Framework of the proposed GSTM-SCD. 
+![Framework](Framework.jpg)
+## Details of the GOST_Mamba
+![GOST_Mamba](GOST_Mamba.jpg)
 
 ## Dataset Download
 
@@ -11,6 +14,26 @@ In the following, we summarize the processed semantic change detection data set 
 * [Landsat-SCD (Baidu)](https://pan.baidu.com/s/17tcdFBgMfx6d_BOsX6lzbw?pwd=hy5w)
 * [WUSU (Baidu)](https://pan.baidu.com/s/1wDfVPU5bKpujBAZQTKpdYg?pwd=pxhq)
 * [DynamicEarthNet (Baidu)](https://pan.baidu.com/s/1KekpsM2OXuXqeFy4pOv_XA?pwd=yfyg)
+
+## 🛠️ Environment Setup (Refer to https://bgithub.xyz/EasonXiao-888/MambaTree/edit/main/README.md)
+
+#### Vision Tasks
+```txt
+conda create -n grootv python=3.9
+conda activate grootv
+
+# Install pytorch 
+pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
+
+# Install other packages
+pip install -r GrootV/grootv_requirements.txt 
+
+# Install Vision_Tree_Scanning
+cd GrootV/third-party/TreeScan
+pip install -v -e .
+
+# Note: You'd better use CUDA 11.8.
+```
 
 ## How to Use
 1. Dataset preparation.
@@ -60,7 +83,7 @@ The reproducible weights of EGMS-Net on the three benchmark datasets are visible
 
 [Baidu](https://pan.baidu.com/s/1NGFO1pVdEHfOF4YGOvDfmA?pwd=h9kp)
 
-## Cite EGMS-Net
+## Cite GSTM-SCD
 
 If you find this work useful or interesting, please consider citing the following BibTeX entry.
 
