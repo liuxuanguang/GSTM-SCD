@@ -1,7 +1,7 @@
 # GSTM-SCD
 Pytorch codes of **GSTM-SCD: Graph-enhanced spatio-temporal state space model for semantic change detection in multi-temporal remote sensing images** [[paper](https://doi.org/10.1016/j.isprsjprs.2025.09.003)]
 
-![Fig2](https://github.com/user-attachments/assets/ec1da70b-d65e-45d3-a941-6dc7ebfeb53e)
+![Fig2]()
 
 ## Dataset Download
 
