@@ -40,9 +40,9 @@ class Options:
         parser.add_argument("--lightweight", dest="lightweight", action="store_true",
                            help='lightweight head for fewer parameters and faster speed')
         parser.add_argument("--backbone", type=str, default="resnet34")
-        parser.add_argument("--data_root", type=str, default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/SECOND/SECOND_total_test")
+        parser.add_argument("--data_root", type=str, default=r"/SECOND/SECOND_total_test")
         parser.add_argument("--load_from", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/checkpoints/SECOND/FEMCD_net_0617/resnet34/epoch77_Score35.77_mIOU71.92_Sek20.27_Fscd60.48_OA86.61.pth")
+                            default=r"best_model.pth")
         parser.add_argument("--test_batch_size", type=int, default=4)
         parser.add_argument("--pretrained", type=bool, default=True,
                            help='initialize the backbone with pretrained parameters')
@@ -146,7 +146,8 @@ def inference(args):
             metric.add_batch(out2, label2.numpy())
             # change_ratio, OA, mIoU, Sek, Fscd, Score, Precision_scd, Recall_scd = metric.evaluate_inference()
             # metric.reset()
-        metric.color_map_SECOND(pred_dir)      #需根据数据集调整函数
+        #The function needs to be adjusted based on the dataset.
+        metric.color_map_SECOND(pred_dir)     
 
         change_ratio, OA, mIoU, Sek, Fscd, Score, Precision_scd, Recall_scd = metric.evaluate_inference()
 
