@@ -89,9 +89,7 @@ class ResBlock1(nn.Module):
             return out
 
 
-#-----------------------------------------------------------------------------------------------
-
-#使用3D树状扫描
+#使用TSSCS
 class STM_GrootV3D_V2(nn.Module):
     def __init__(self, inchannel, channel_first):
         super(STM_GrootV3D_V2, self).__init__()
@@ -121,7 +119,7 @@ class STM_GrootV3D_V2(nn.Module):
 
         return xf_sm, yf_sm
 
-# Proposed GSTMSCD for bi-temporal SCD
+# Proposed GSTM-SCD for bi-temporal SCD tasks
 class BiGrootV3D_SV3_tiny(nn.Module):
     def __init__(self, backbone, pretrained, nclass, lightweight, M, Lambda):
         super(BiGrootV3D_SV3_tiny, self).__init__()
@@ -132,12 +130,12 @@ class BiGrootV3D_SV3_tiny(nn.Module):
         self.Lambda = Lambda
         self.backbone = GrootV_3D(depths=[2, 2, 9, 2])
 
-        if backbone == "resnet18" or backbone == "resnet34" or backbone == "3D-STVSS":
+        if backbone == "resnet18" or backbone == "resnet34" or backbone == "GOST-Mamba":
             self.channel_nums = [80, 160, 320, 640, 128]
         elif backbone == "resnet50":
             self.channel_nums = [256, 512, 1024, 2048]
 
-        if backbone == "resnet18" or backbone == "resnet34" or backbone == "resnet50" or backbone == "3D-STVSS":
+        if backbone == "resnet18" or backbone == "resnet34" or backbone == "resnet50" or backbone == "GOST-Mamba":
             self.Seg_Decoder1 = Seg_Decoder_ResNet(self.channel_nums)
             self.CD_Decoder = Seg_Decoder_ResNet(self.channel_nums)
         else:
@@ -206,17 +204,14 @@ class BiGrootV3D_SV3_tiny(nn.Module):
         xy_in[:, :, :, 0:w] = x1
         xy_in[:, :, :, w:2*w] = x2
         feature_xy = self.backbone.forward(xy_in)
-        # 初始化feature1和feature2列表
+        # Initialize the feature1 and feature2 lists
         feature1 = []
         feature2 = []
-        # 遍历A中的每个矩阵
+        # Traverse each matrix in feature_xy
         for matrix in feature_xy:
-            # 获取矩阵的W维度大小
             W = matrix.size(3)
-            # 在W维度上左右分为两部分
-            left_part = matrix[:, :, :, :W // 2]  # 左半部分
-            right_part = matrix[:, :, :, W // 2:]  # 右半部分
-            # 将左右两部分分别存储到feature1和feature2列表中
+            left_part = matrix[:, :, :, :W // 2]
+            right_part = matrix[:, :, :, W // 2:]
             feature1.append(left_part)
             feature2.append(right_part)
         feature1_4, feature2_4 = self.bi_mamba_forward(feature1[-1], feature2[-1])
@@ -229,9 +224,6 @@ class BiGrootV3D_SV3_tiny(nn.Module):
         feature_diff = []
         for i in range(len(feature1)):
             feature_diff.append(self.CFEM[i](feature1[i], feature2[i]))
-        # feature_diff = []
-        # for i in range(len(feature1)):
-        #     feature_diff.append(feature1[i]-feature2[i])
         xc = self.CD_Decoder(feature_diff)
         change = self.classifierCD(xc)
         change = F.interpolate(change, size=(h, w), mode='bilinear', align_corners=False)
@@ -254,12 +246,12 @@ class BiGrootV3D_SV3_small(nn.Module):
         self.Lambda = Lambda
         self.backbone = GrootV_3D(depths=[2, 2, 13, 2])
 
-        if backbone == "resnet18" or backbone == "resnet34" or backbone == "3D-STVSS":
+        if backbone == "resnet18" or backbone == "resnet34" or backbone == "GOST-Mamba":
             self.channel_nums = [96, 192, 384, 768, 128]
         elif backbone == "resnet50":
             self.channel_nums = [256, 512, 1024, 2048]
 
-        if backbone == "resnet18" or backbone == "resnet34" or backbone == "resnet50" or backbone == "3D-STVSS":
+        if backbone == "resnet18" or backbone == "resnet34" or backbone == "resnet50" or backbone == "GOST-Mamba":
             self.Seg_Decoder1 = Seg_Decoder_ResNet(self.channel_nums)
             self.Seg_Decoder2 = Seg_Decoder_ResNet(self.channel_nums)
             self.CD_Decoder = Seg_Decoder_ResNet(self.channel_nums)
@@ -280,7 +272,7 @@ class BiGrootV3D_SV3_small(nn.Module):
             nn.ReLU(True),
             nn.Dropout(0.2, False),
             nn.Conv2d(128, self.nclass, 1, bias=True),
-            # relu后面不用
+            # relu
         )
         self.softmax = nn.Softmax(dim=1)
         self.classifierCD = nn.Sequential(nn.Conv2d(256, 64, kernel_size=1), nn.BatchNorm2d(64), nn.ReLU(), nn.Dropout(),
@@ -328,17 +320,12 @@ class BiGrootV3D_SV3_small(nn.Module):
         xy_in[:, :, :, 0:w] = x1
         xy_in[:, :, :, w:2*w] = x2
         feature_xy = self.backbone.forward(xy_in)
-        # 初始化feature1和feature2列表
         feature1 = []
         feature2 = []
-        # 遍历A中的每个矩阵
         for matrix in feature_xy:
-            # 获取矩阵的W维度大小
             W = matrix.size(3)
-            # 在W维度上左右分为两部分
-            left_part = matrix[:, :, :, :W // 2]  # 左半部分
-            right_part = matrix[:, :, :, W // 2:]  # 右半部分
-            # 将左右两部分分别存储到feature1和feature2列表中
+            left_part = matrix[:, :, :, :W // 2] 
+            right_part = matrix[:, :, :, W // 2:] 
             feature1.append(left_part)
             feature2.append(right_part)
         feature1_4, feature2_4 = self.bi_mamba_forward(feature1[-1], feature2[-1])
@@ -366,7 +353,7 @@ class BiGrootV3D_SV3_small(nn.Module):
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = BiGrootV3D_SV3_small(backbone='3D-STVSS', pretrained=True, nclass=7, lightweight=True, M=6, Lambda=0.00005).to(device)
+    model = BiGrootV3D_SV3_small(backbone='GOST-Mamba', pretrained=True, nclass=7, lightweight=True, M=6, Lambda=0.00005).to(device)
     image1 = torch.randn(1, 3, 512, 512).to(device)
     image2 = torch.randn(1, 3, 512, 512).to(device)
     seg1, seg2, change = model(image1, image2)
