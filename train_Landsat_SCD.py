@@ -1,11 +1,8 @@
 from datasets.change_detection import ChangeDetection_Landsat_SCD
-from models.proposed_BiGrootV import BiGrootV3D_SV3 as Net
-# from models.proposed_BiGrootV import BiGrootV_V5Base as Net
-
+from models.GSTM_SCD_BiSCD import GSTMSCD_Bitemporal_tiny as Net
 from utils.palette import color_map_Landsat_SCD as color_map
 from utils.metric import IOUandSek
 from utils.loss import ChangeSimilarity, DiceLoss
-
 import os
 import numpy as np
 import torch
@@ -15,8 +12,6 @@ from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import argparse
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 working_path = os.path.dirname(os.path.abspath(__file__))
 torch.manual_seed(42)
 
@@ -24,13 +19,13 @@ class Options:
     def __init__(self):
         parser = argparse.ArgumentParser('Semantic Change Detection')
         parser.add_argument("--data_name", type=str, default=r"Landsat_SCD")
-        parser.add_argument("--Net_name", type=str, default="New_SECOND_dataset-BiGrootV3D_SV3-noCFEM-retrain-0217")
+        parser.add_argument("--Net_name", type=str, default="model_name")
         parser.add_argument("--backbone", type=str, default="resnet34")
-        parser.add_argument("--data_root", type=str, default=r"/media/lenovo/课题研究/博士小论文数据/语义变化检测数据集/Landsat-SCD")
+        parser.add_argument("--data_root", type=str, default=r"/Landsat-SCD")
         parser.add_argument("--log_dir", type=str)
-        parser.add_argument("--batch_size", type=int, default=2)
-        parser.add_argument("--val_batch_size", type=int, default=2)
-        parser.add_argument("--test_batch_size", type=int, default=1)
+        parser.add_argument("--batch_size", type=int, default=4)
+        parser.add_argument("--val_batch_size", type=int, default=4)
+        parser.add_argument("--test_batch_size", type=int, default=4)
         parser.add_argument("--epochs", type=int, default=100)
         # lr=0.001时，基础网络效果最好，继续增大、lr
         parser.add_argument("--lr", type=float, default=0.001)
@@ -73,7 +68,7 @@ class Trainer:
                                       pin_memory=False, num_workers=8, drop_last=True)
         self.valloader = DataLoader(valset, batch_size=args.val_batch_size, shuffle=False,
                                     pin_memory=True, num_workers=8, drop_last=False)
-        self.model = Net(args.backbone, args.pretrained, len(trainset.CLASSES), args.lightweight, args.M, args.Lambda)
+        self.model = Net(args.backbone, args.pretrained, len(trainset.CLASSES), args.lightweight, args.M, args.Lambda, 80, [2,2,9,2])
         if args.pretrain_from:
             self.model.load_state_dict(torch.load(args.pretrain_from), strict=False)
         if args.load_from:
