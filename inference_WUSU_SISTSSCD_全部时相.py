@@ -1,6 +1,4 @@
 import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import numpy as np
 import PIL.Image as Image
@@ -37,10 +35,10 @@ class Options:
                             help='lightweight head for fewer parameters and faster speed')
         parser.add_argument("--backbone", type=str, default="resnet34")
         parser.add_argument("--data_root", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/语义变化检测数据集/DynamicEarthNet_process/train/DynamicEarth512/test")
+                            default=r"")
         parser.add_argument("--load_from", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/checkpoints/WUSU/UTAE_epoch95_mIOU72.94_Fscd68.25_OA88.70.pth")
-        parser.add_argument("--test_batch_size", type=int, default=1)
+                            default=r"best_model.pth")
+        parser.add_argument("--test_batch_size", type=int, default=4)
         parser.add_argument("--pretrained", type=bool, default=True,
                             help='initialize the backbone with pretrained parameters')
         parser.add_argument("--tta", dest="tta", action="store_true",
@@ -58,12 +56,9 @@ def inference_scd(args):
     begin_time = time.time()
     working_path = os.path.dirname(os.path.abspath(__file__))
     pred_dir = os.path.join(working_path, 'pred_results', args.data_name, args.Net_name, args.backbone)
-
-    # 为当前时相对创建一个目录
     pair_dir = os.path.join(pred_dir, 'pred_LC')
     os.makedirs(pair_dir, exist_ok=True)
 
-    # 创建保存路径
     pred_save_path1 = os.path.join(pair_dir, 'pred_semantic_time1')
     pred_save_path2 = os.path.join(pair_dir, 'pred_semantic_time2')
     pred_save_path3 = os.path.join(pair_dir, 'pred_semantic_time3')
@@ -89,9 +84,7 @@ def inference_scd(args):
     tbar = tqdm(testloader)
     with torch.no_grad():
         for img1, img2, img3, label1, label2, label3, label_bn, id in tbar:
-            # 确保输入数据为float32
             img1, img2, img3 = img1.float().cuda(), img2.float().cuda(), img3.float().cuda()
-            # 创建输入张量
             input = [img1, img2, img3]
             #  MultiUTAE:dim=1,UNet3D:dim=2
             input = torch.stack(input, dim=1)
