@@ -6,7 +6,7 @@ import numpy as np
 import PIL.Image as Image
 # import datasets.MultiSiamese_RS_ST_TL_DynamocEarth as RS
 import datasets.MultiSiamese_RS_ST_TL_DynamocEarth_random as RS
-from models.proposed_MTGrootV3D import MTGrootV3D_SV3_DynamicEarth as Net
+from models.GSTMSCD_MTSCD import GSTMSCD_Dynamic as Net
 # from models.proposed_MTGrootV3D import GSTMSCD_baseline as Net
 # from models.HRSCD_str4 import HRSCD_str4_NMT as Net
 # from models.EGMSNet import EGMSNet_NMT as Net
