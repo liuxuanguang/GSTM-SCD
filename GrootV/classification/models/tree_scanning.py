@@ -12,8 +12,7 @@ from einops import rearrange, repeat
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from tree_scan import _C
-from GrootV.classification.models.tree_scan_utils.tree_scan_core import (MinimumSpanningTree, MinimumSpanning3DTree, MinimumSpanningMT3DTree,
-                                                                         MinimumSpanningMTnDTree, MinimumSpanningMTnDTree_revised,MinimumSpanningMTnDTree_AE)
+from GrootV.classification.models.tree_scan_utils.tree_scan_core import MinimumSpanning3DTree, MinimumSpanningMTnDTree
 
 class _BFS(Function):
     @staticmethod
@@ -82,6 +81,7 @@ def batch_index_opr(data, index):
     data = torch.gather(data, 2, index)
     return data
 
+# 双时相核心扫描代码 0919
 def tree_MTscanning3D_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm):
     K = 1  # 设定K的值为1
     _, _, H, W = origin_shape  # 获取原始形状的维度信息
@@ -111,179 +111,16 @@ def tree_MTscanning3D_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_
     # 重新排列xs以匹配原始图像尺寸
     fea4tree_hw = rearrange(xs, 'b d (h w) -> b d h w', h=H, w=W)  # B d L
     # mst_layer = MinimumSpanningTree("Cosine", torch.exp)  # 创建最小生成树层,原始代码
-    mst_layer = MinimumSpanningMTnDTree_revised("Cosine", torch.exp, Tem=2)  # 创建最小生成树层，3D扫描代码
+    # 双时相
+    mst_layer = MinimumSpanning3DTree("Cosine", torch.exp)
+    # 超过两个时相
+    # mst_layer = MinimumSpanningMTnDTree_revised("Cosine", torch.exp, Tem=3)  # 创建最小生成树层，3D扫描代码
     tree = mst_layer(fea4tree_hw)  # 根据特征构建最小生成树
 
-    # 使用BFS遍历树，获取排序索引、父节点和子节点
-    sorted_index, sorted_parent, sorted_child = bfs(tree, 6)
-    edge_weight, = edge_transform(edge_weight, sorted_index, sorted_child)  # 调整边缘权重
-
-    # 初始化边缘权重系数为1
-    edge_weight_coef = torch.ones_like(sorted_index, dtype=edge_weight.dtype)  # edge coef, default by 1
-
-    # 使用Refine操作根据树结构和边缘权重调整特征
-    feature_out = refine(feat_in, edge_weight, sorted_index, sorted_parent, sorted_child, edge_weight_coef)
-
-    # 如果提供了归一化层，则对特征进行归一化
-    if h_norm is not None:
-        out = h_norm(feature_out.transpose(-1, -2).contiguous())
-
-    # 根据Cs和Ds调整输出特征y
-    y = (rearrange(out, 'b l (k d) -> b l k d', k=K, d=int(D / K)).unsqueeze(-1) @ rearrange(Cs,
-    'b k n l -> b l k n').unsqueeze(-1)).squeeze(-1)  # 调整维度并计算矩阵乘法
-    y = rearrange(y, 'b l k d -> b (k d) l')  # 重新排列y的维度
-    y = y + Ds.reshape(1, -1, 1) * xs  # 根据Ds调整y
-    return y  # 返回调整后的特征y
-
-
-def tree_scanningMT3D_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm, Tem):
-    K = 1  # 设定K的值为1
-    _, _, H, W = origin_shape  # 获取原始形状的维度信息
-    B, D, L = xs.shape  # 获取输入xs的维度信息
-    dts = F.softplus(dts + delta_bias.unsqueeze(0).unsqueeze(-1))  # 对dts应用softplus激活函数，并调整维度
-
-    # 计算deltaA，用于调整边缘权重
-    deltaA = (dts * As.unsqueeze(0)).exp_()  # b d l
-
-    # 计算deltaB，用于调整特征
-    deltaB = rearrange(dts, 'b (k d) l -> b k d l', k=K, d=int(D / K)) * Bs  # b 1 d L
-    BX = deltaB * rearrange(xs, 'b (k d) l -> b k d l', k=K, d=int(D / K))  # b 1 d L，应用deltaB调整xs
-
-    # 导入自定义的BFS和Refine操作
-    bfs = _BFS.apply
-    refine = _3DRefine.apply
-
-    # 调整BX的形状以准备后续处理
-    feat_in = BX.view(B, -1, L)  # b D L
-    edge_weight = deltaA  # b D L，设置边缘权重
-
-    # 定义边缘转换函数，根据排序索引调整边缘权重
-    def edge_transform(edge_weight, sorted_index, sorted_child):
-        edge_weight = batch_index_opr(edge_weight, sorted_index)  # b d l
-        return edge_weight,
-
-    # 重新排列xs以匹配原始图像尺寸
-    fea4tree_hw = rearrange(xs, 'b d (h w) -> b d h w', h=H, w=W)  # B d L
-    # mst_layer = MinimumSpanningTree("Cosine", torch.exp)  # 创建最小生成树层,原始代码
-    # mst_layer = MinimumSpanningMTnDTree_revised("Cosine", torch.exp, Tem)  # 创建最小生成树层，3D扫描代码
-    mst_layer = MinimumSpanningMTnDTree_AE("Cosine", torch.exp, Tem) # AE 14邻接矩阵 创建最小生成树层，3D扫描代码
-    tree = mst_layer(fea4tree_hw)  # 根据特征构建最小生成树
-
-    # 使用BFS遍历树，获取排序索引、父节点和子节点
-    # sorted_index, sorted_parent, sorted_child = bfs(tree, 6)   # 6方向扫描
-    sorted_index, sorted_parent, sorted_child = bfs(tree, 14)  # 14方向扫描
-    edge_weight, = edge_transform(edge_weight, sorted_index, sorted_child)  # 调整边缘权重
-
-    # 初始化边缘权重系数为1
-    edge_weight_coef = torch.ones_like(sorted_index, dtype=edge_weight.dtype)  # edge coef, default by 1
-
-    # 使用Refine操作根据树结构和边缘权重调整特征
-    feature_out = refine(feat_in, edge_weight, sorted_index, sorted_parent, sorted_child, edge_weight_coef)
-
-    # 如果提供了归一化层，则对特征进行归一化
-    if h_norm is not None:
-        out = h_norm(feature_out.transpose(-1, -2).contiguous())
-
-    # 根据Cs和Ds调整输出特征y
-    y = (rearrange(out, 'b l (k d) -> b l k d', k=K, d=int(D / K)).unsqueeze(-1) @ rearrange(Cs,
-    'b k n l -> b l k n').unsqueeze(-1)).squeeze(-1)  # 调整维度并计算矩阵乘法
-    y = rearrange(y, 'b l k d -> b (k d) l')  # 重新排列y的维度
-    y = y + Ds.reshape(1, -1, 1) * xs  # 根据Ds调整y
-    return y  # 返回调整后的特征y
-
-def tree_scanningMTnD_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm):
-    K = 1  # 设定K的值为1
-    _, _, H, W = origin_shape  # 获取原始形状的维度信息
-    B, D, L = xs.shape  # 获取输入xs的维度信息
-    dts = F.softplus(dts + delta_bias.unsqueeze(0).unsqueeze(-1))  # 对dts应用softplus激活函数，并调整维度
-
-    # 计算deltaA，用于调整边缘权重
-    deltaA = (dts * As.unsqueeze(0)).exp_()  # b d l
-
-    # 计算deltaB，用于调整特征
-    deltaB = rearrange(dts, 'b (k d) l -> b k d l', k=K, d=int(D / K)) * Bs  # b 1 d L
-    BX = deltaB * rearrange(xs, 'b (k d) l -> b k d l', k=K, d=int(D / K))  # b 1 d L，应用deltaB调整xs
-
-    # 导入自定义的BFS和Refine操作
-    bfs = _BFS.apply
-    refine = _3DRefine.apply
-
-    # 调整BX的形状以准备后续处理
-    feat_in = BX.view(B, -1, L)  # b D L
-    edge_weight = deltaA  # b D L，设置边缘权重
-
-    # 定义边缘转换函数，根据排序索引调整边缘权重
-    def edge_transform(edge_weight, sorted_index, sorted_child):
-        edge_weight = batch_index_opr(edge_weight, sorted_index)  # b d l
-        return edge_weight,
-
-    # 重新排列xs以匹配原始图像尺寸
-    fea4tree_hw = rearrange(xs, 'b d (h w) -> b d h w', h=H, w=W)  # B d L
-    # mst_layer = MinimumSpanningTree("Cosine", torch.exp)  # 创建最小生成树层,原始代码
-    # 多时相的用这个
-    mst_layer = MinimumSpanningMTnDTree("Cosine", torch.exp, Tem=2)
-    # 双时相用这个
-    # mst_layer = MinimumSpanning3DTree("Cosine", torch.exp)  # 创建最小生成树层，3D扫描代码MinimumSpanningMT3DTree
-    tree = mst_layer(fea4tree_hw)  # 根据特征构建最小生成树
-
-    # 使用BFS遍历树，获取排序索引、父节点和子节点
-    sorted_index, sorted_parent, sorted_child = bfs(tree, 6)
-    edge_weight, = edge_transform(edge_weight, sorted_index, sorted_child)  # 调整边缘权重
-
-    # 初始化边缘权重系数为1
-    edge_weight_coef = torch.ones_like(sorted_index, dtype=edge_weight.dtype)  # edge coef, default by 1
-
-    # 使用Refine操作根据树结构和边缘权重调整特征
-    feature_out = refine(feat_in, edge_weight, sorted_index, sorted_parent, sorted_child, edge_weight_coef)
-
-    # 如果提供了归一化层，则对特征进行归一化
-    if h_norm is not None:
-        out = h_norm(feature_out.transpose(-1, -2).contiguous())
-
-    # 根据Cs和Ds调整输出特征y
-    y = (rearrange(out, 'b l (k d) -> b l k d', k=K, d=int(D / K)).unsqueeze(-1) @ rearrange(Cs,
-    'b k n l -> b l k n').unsqueeze(-1)).squeeze(-1)  # 调整维度并计算矩阵乘法
-    y = rearrange(y, 'b l k d -> b (k d) l')  # 重新排列y的维度
-    y = y + Ds.reshape(1, -1, 1) * xs  # 根据Ds调整y
-    return y
-
-def tree_scanning3D_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm):
-    K = 1  # 设定K的值为1
-    _, _, H, W = origin_shape  # 获取原始形状的维度信息
-    B, D, L = xs.shape  # 获取输入xs的维度信息
-    dts = F.softplus(dts + delta_bias.unsqueeze(0).unsqueeze(-1))  # 对dts应用softplus激活函数，并调整维度
-
-    # 计算deltaA，用于调整边缘权重
-    deltaA = (dts * As.unsqueeze(0)).exp_()  # b d l
-
-    # 计算deltaB，用于调整特征
-    deltaB = rearrange(dts, 'b (k d) l -> b k d l', k=K, d=int(D / K)) * Bs  # b 1 d L
-    BX = deltaB * rearrange(xs, 'b (k d) l -> b k d l', k=K, d=int(D / K))  # b 1 d L，应用deltaB调整xs
-
-    # 导入自定义的BFS和Refine操作
-    bfs = _BFS.apply
-    refine = _3DRefine.apply
-
-    # 调整BX的形状以准备后续处理
-    feat_in = BX.view(B, -1, L)  # b D L
-    edge_weight = deltaA  # b D L，设置边缘权重
-
-    # 定义边缘转换函数，根据排序索引调整边缘权重
-    def edge_transform(edge_weight, sorted_index, sorted_child):
-        edge_weight = batch_index_opr(edge_weight, sorted_index)  # b d l
-        return edge_weight,
-
-    # 重新排列xs以匹配原始图像尺寸
-    fea4tree_hw = rearrange(xs, 'b d (h w) -> b d h w', h=H, w=W)  # B d L
-    # mst_layer = MinimumSpanningTree("Cosine", torch.exp)  # 创建最小生成树层,原始代码
-    # 多时相的用这个
-    mst_layer = MinimumSpanningMTnDTree("Cosine", torch.exp, Tem=3)
-    # 双时相用这个
-    # mst_layer = MinimumSpanning3DTree("Cosine", torch.exp)  # 创建最小生成树层，3D扫描代码MinimumSpanningMT3DTree
-    tree = mst_layer(fea4tree_hw)  # 根据特征构建最小生成树
-
-    # 使用BFS遍历树，获取排序索引、父节点和子节点
+    # 使用BFS遍历树，获取排序索引、父节点和子节点，双时相是5邻接，多时相是6邻接
     sorted_index, sorted_parent, sorted_child = bfs(tree, 5)
+    # sorted_index, sorted_parent, sorted_child = bfs(tree, 6)
+
     edge_weight, = edge_transform(edge_weight, sorted_index, sorted_child)  # 调整边缘权重
 
     # 初始化边缘权重系数为1
@@ -302,9 +139,9 @@ def tree_scanning3D_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_no
     y = rearrange(y, 'b l k d -> b (k d) l')  # 重新排列y的维度
     y = y + Ds.reshape(1, -1, 1) * xs  # 根据Ds调整y
     return y  # 返回调整后的特征y
-
-#核心代码
-def tree_scanning_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm):
+#
+# 多时相扫描核心代码 0919
+def tree_scanningMT3D_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm):
     K = 1  # 设定K的值为1
     _, _, H, W = origin_shape  # 获取原始形状的维度信息
     B, D, L = xs.shape  # 获取输入xs的维度信息
@@ -319,7 +156,7 @@ def tree_scanning_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm
 
     # 导入自定义的BFS和Refine操作
     bfs = _BFS.apply
-    refine = _Refine.apply
+    refine = _3DRefine.apply
 
     # 调整BX的形状以准备后续处理
     feat_in = BX.view(B, -1, L)  # b D L
@@ -333,11 +170,11 @@ def tree_scanning_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm
     # 重新排列xs以匹配原始图像尺寸
     fea4tree_hw = rearrange(xs, 'b d (h w) -> b d h w', h=H, w=W)  # B d L
     # mst_layer = MinimumSpanningTree("Cosine", torch.exp)  # 创建最小生成树层,原始代码
-    mst_layer = MinimumSpanningTree("Cosine", torch.exp)  # 创建最小生成树层，3D扫描代码
+    mst_layer = MinimumSpanningMTnDTree("Cosine", torch.exp)  # 创建最小生成树层，3D扫描代码
     tree = mst_layer(fea4tree_hw)  # 根据特征构建最小生成树
 
     # 使用BFS遍历树，获取排序索引、父节点和子节点
-    sorted_index, sorted_parent, sorted_child = bfs(tree, 4)
+    sorted_index, sorted_parent, sorted_child = bfs(tree, 6)  # 14方向扫描
     edge_weight, = edge_transform(edge_weight, sorted_index, sorted_child)  # 调整边缘权重
 
     # 初始化边缘权重系数为1
@@ -357,6 +194,8 @@ def tree_scanning_core(xs, dts, As, Bs, Cs, Ds, delta_bias, origin_shape, h_norm
     y = y + Ds.reshape(1, -1, 1) * xs  # 根据Ds调整y
     return y  # 返回调整后的特征y
 
+
+# 多时相3D scanning 0919
 def tree_scanningMT3D(
         x: torch.Tensor = None,
         x_proj_weight: torch.Tensor = None,
@@ -368,8 +207,7 @@ def tree_scanningMT3D(
         out_norm: torch.nn.Module = None,
         to_dtype=True,
         force_fp32=False,  # False if ssoflex
-        h_norm=None,
-        Tem=6):
+        h_norm=None):
     B, D, H, W = x.shape
     origin_shape = x.shape
     D, N = A_logs.shape
@@ -399,7 +237,7 @@ def tree_scanningMT3D(
 
     ys = tree_scanningMT3D_core(xs, dts,
                             As, Bs, Cs, Ds,
-                            delta_bias, origin_shape, h_norm, Tem).view(B, K, -1, H, W)
+                            delta_bias, origin_shape, h_norm).view(B, K, -1, H, W)
 
     y = rearrange(ys, 'b k d h w -> b (k d) (h w)')
     y = y.transpose(dim0=1, dim1=2).contiguous()  # (B, L, C)
@@ -407,6 +245,7 @@ def tree_scanningMT3D(
 
     return (y.to(x.dtype) if to_dtype else y)
 
+# 双时相的3D扫描 0919
 def tree_scanning3D(
         x: torch.Tensor = None,
         x_proj_weight: torch.Tensor = None,
@@ -456,273 +295,7 @@ def tree_scanning3D(
 
     return (y.to(x.dtype) if to_dtype else y)
 
-def tree_scanning(
-    x: torch.Tensor=None, 
-    x_proj_weight: torch.Tensor=None,
-    x_proj_bias: torch.Tensor=None,
-    dt_projs_weight: torch.Tensor=None,
-    dt_projs_bias: torch.Tensor=None,
-    A_logs: torch.Tensor=None,
-    Ds: torch.Tensor=None,
-    out_norm: torch.nn.Module=None,
-    to_dtype=True,
-    force_fp32=False, # False if ssoflex
-    h_norm=None,
-):
-
-    B, D, H, W = x.shape
-    origin_shape = x.shape
-    D, N = A_logs.shape
-    K, D, R = dt_projs_weight.shape
-    L = H * W
-    
-    xs = rearrange(x.unsqueeze(1),'b k d h w -> b k d (h w)') 
-    x_dbl = torch.einsum("b k d l, k c d -> b k c l", xs, x_proj_weight)
-    if x_proj_bias is not None:
-        x_dbl = x_dbl + x_proj_bias.view(1, K, -1, 1)
-    dts, Bs, Cs = torch.split(x_dbl, [R, N, N], dim=2)
-    dts = torch.einsum("b k r l, k d r -> b k d l", dts, dt_projs_weight)
-    xs = xs.view(B, -1, L)
-    dts = dts.contiguous().view(B, -1, L)
-    As = -torch.exp(A_logs.to(torch.float)) # (c, d)
-    Bs = Bs.contiguous()
-    Cs = Cs.contiguous()
-    Ds = Ds.to(torch.float) # (c)
-    delta_bias = dt_projs_bias.view(-1).to(torch.float)
-
-    force_fp32 = True
-    if force_fp32:
-        xs = xs.to(torch.float)
-        dts = dts.to(torch.float)
-        Bs = Bs.to(torch.float)
-        Cs = Cs.to(torch.float)
-
-    ys = tree_scanning_core(xs, dts,
-                           As, Bs, Cs, Ds,
-                             delta_bias, origin_shape,h_norm).view(B, K, -1, H, W)
-
-    y = rearrange(ys,'b k d h w -> b (k d) (h w)')
-    y = y.transpose(dim0=1, dim1=2).contiguous() # (B, L, C)
-    y = out_norm(y).view(B, H, W, -1)
-
-    return (y.to(x.dtype) if to_dtype else y)
-
-
-def tree_MTscanning3D(
-        x: torch.Tensor = None,
-        x_proj_weight: torch.Tensor = None,
-        x_proj_bias: torch.Tensor = None,
-        dt_projs_weight: torch.Tensor = None,
-        dt_projs_bias: torch.Tensor = None,
-        A_logs: torch.Tensor = None,
-        Ds: torch.Tensor = None,
-        out_norm: torch.nn.Module = None,
-        to_dtype=True,
-        force_fp32=False,  # False if ssoflex
-        h_norm=None,):
-    B, D, H, W = x.shape
-    origin_shape = x.shape
-    D, N = A_logs.shape
-    K, D, R = dt_projs_weight.shape
-    L = H * W
-
-    xs = rearrange(x.unsqueeze(1), 'b k d h w -> b k d (h w)')
-    x_dbl = torch.einsum("b k d l, k c d -> b k c l", xs, x_proj_weight)
-    if x_proj_bias is not None:
-        x_dbl = x_dbl + x_proj_bias.view(1, K, -1, 1)
-    dts, Bs, Cs = torch.split(x_dbl, [R, N, N], dim=2)
-    dts = torch.einsum("b k r l, k d r -> b k d l", dts, dt_projs_weight)
-    xs = xs.view(B, -1, L)
-    dts = dts.contiguous().view(B, -1, L)
-    As = -torch.exp(A_logs.to(torch.float))  # (c, d)
-    Bs = Bs.contiguous()
-    Cs = Cs.contiguous()
-    Ds = Ds.to(torch.float)  # (c)
-    delta_bias = dt_projs_bias.view(-1).to(torch.float)
-
-    force_fp32 = True
-    if force_fp32:
-        xs = xs.to(torch.float)
-        dts = dts.to(torch.float)
-        Bs = Bs.to(torch.float)
-        Cs = Cs.to(torch.float)
-
-    ys = tree_MTscanning3D_core(xs, dts,
-                            As, Bs, Cs, Ds,
-                            delta_bias, origin_shape, h_norm).view(B, K, -1, H, W)
-
-    y = rearrange(ys, 'b k d h w -> b (k d) (h w)')
-    y = y.transpose(dim0=1, dim1=2).contiguous()  # (B, L, C)
-    y = out_norm(y).view(B, H, W, -1)
-
-    return (y.to(x.dtype) if to_dtype else y)
-
-class Tree_SSM(nn.Module):
-    def __init__(
-        self,
-        # basic dims ===========
-        d_model=96,
-        d_state=16,
-        ssm_ratio=2.0,
-        ssm_rank_ratio=2.0,
-        dt_rank="auto",
-        act_layer=nn.SiLU,
-        # dwconv ===============
-        d_conv=3, # < 2 means no conv 
-        conv_bias=True,
-        # ======================
-        dropout=0.0,
-        bias=False,
-        # dt init ==============
-        dt_min=0.001,
-        dt_max=0.1,
-        dt_init="random",
-        dt_scale=1.0,
-        dt_init_floor=1e-4,
-        **kwargs,
-    ):
-        """
-        ssm_rank_ratio would be used in the future...
-        """
-        factory_kwargs = {"device": None, "dtype": None}
-        super().__init__()
-        d_expand = int(ssm_ratio * d_model)
-        d_inner = int(min(ssm_rank_ratio, ssm_ratio) * d_model) if ssm_rank_ratio > 0 else d_expand
-        self.dt_rank = math.ceil(d_model / 16) if dt_rank == "auto" else dt_rank
-        self.d_state = math.ceil(d_model / 6) if d_state == "auto" else d_state 
-        self.d_conv = d_conv
-
-        self.out_norm = nn.LayerNorm(d_inner)
-        self.h_norm = nn.LayerNorm(d_inner)
-
-        self.K = 1
-        self.K2 = self.K
-
-        # in proj =======================================
-        d_proj = d_expand * 2
-        self.in_proj = nn.Linear(d_model, d_proj, bias=bias, **factory_kwargs)
-        self.act: nn.Module = act_layer()
-        
-        # conv =======================================
-        if self.d_conv > 1:
-            self.conv2d = nn.Conv2d(
-                in_channels=d_expand,
-                out_channels=d_expand,
-                groups=d_expand,
-                bias=conv_bias,
-                kernel_size=d_conv,
-                padding=(d_conv - 1) // 2,
-                **factory_kwargs,
-            )
-
-        # x proj ============================
-        self.x_proj = [
-            nn.Linear(d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs)
-            for _ in range(self.K)
-        ]
-        self.x_proj_weight = nn.Parameter(torch.stack([t.weight for t in self.x_proj], dim=0)) # (K, N, inner)
-        del self.x_proj
-        
-        # out proj =======================================
-        self.out_proj = nn.Linear(d_expand, d_model, bias=bias, **factory_kwargs)
-        self.dropout = nn.Dropout(dropout) if dropout > 0. else nn.Identity()
-
-        # dt proj ============================
-        self.dt_projs = [
-            self.dt_init(self.dt_rank, d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs)
-            for _ in range(self.K)
-        ]
-        self.dt_projs_weight = nn.Parameter(torch.stack([t.weight for t in self.dt_projs], dim=0)) # (K, inner, rank)
-        self.dt_projs_bias = nn.Parameter(torch.stack([t.bias for t in self.dt_projs], dim=0)) # (K, inner)
-        del self.dt_projs
-        
-        # A, D =======================================
-        self.A_logs = self.A_log_init(self.d_state, d_inner, copies=self.K2, merge=True) # (K * D, N)
-        self.Ds = self.D_init(d_inner, copies=self.K2, merge=True) # (K * D)
-
-    @staticmethod
-    def dt_init(dt_rank, d_inner, dt_scale=1.0, dt_init="random", dt_min=0.001, dt_max=0.1, dt_init_floor=1e-4, **factory_kwargs):
-        dt_proj = nn.Linear(dt_rank, d_inner, bias=True, **factory_kwargs)
-
-        # Initialize special dt projection to preserve variance at initialization
-        dt_init_std = dt_rank**-0.5 * dt_scale
-        if dt_init == "constant":
-            nn.init.constant_(dt_proj.weight, dt_init_std)
-        elif dt_init == "random":
-            nn.init.uniform_(dt_proj.weight, -dt_init_std, dt_init_std)
-        else:
-            raise NotImplementedError
-
-        # Initialize dt bias so that F.softplus(dt_bias) is between dt_min and dt_max
-        dt = torch.exp(
-            torch.rand(d_inner, **factory_kwargs) * (math.log(dt_max) - math.log(dt_min))
-            + math.log(dt_min)
-        ).clamp(min=dt_init_floor)
-        # Inverse of softplus: https://github.com/pytorch/pytorch/issues/72759
-        inv_dt = dt + torch.log(-torch.expm1(-dt))
-        with torch.no_grad():
-            dt_proj.bias.copy_(inv_dt)
-        # Our initialization would set all Linear.bias to zero, need to mark this one as _no_reinit
-        # dt_proj.bias._no_reinit = True
-        
-        return dt_proj
-
-    @staticmethod
-    def A_log_init(d_state, d_inner, copies=-1, device=None, merge=True):
-        # S4D real initialization
-        A = repeat(
-            torch.arange(1, d_state + 1, dtype=torch.float32, device=device),
-            "n -> d n",
-            d=d_inner,
-        ).contiguous()
-        A_log = torch.log(A)  # Keep A_log in fp32
-        if copies > 0:
-            A_log = repeat(A_log, "d n -> r d n", r=copies)
-            if merge:
-                A_log = A_log.flatten(0, 1)
-        A_log = nn.Parameter(A_log)
-        A_log._no_weight_decay = True
-        return A_log
-
-    @staticmethod
-    def D_init(d_inner, copies=-1, device=None, merge=True):
-        # D "skip" parameter
-        D = torch.ones(d_inner, device=device)
-        if copies > 0:
-            D = repeat(D, "n1 -> r n1", r=copies)
-            if merge:
-                D = D.flatten(0, 1)
-        D = nn.Parameter(D)  # Keep in fp32
-        D._no_weight_decay = True
-        return D
-
-
-    def forward_core(self, x: torch.Tensor, channel_first=False, force_fp32=None):
-        force_fp32 = self.training if force_fp32 is None else force_fp32
-        if not channel_first:
-            x = x.permute(0, 3, 1, 2).contiguous()
-        x = tree_scanning(
-            x, self.x_proj_weight, None, self.dt_projs_weight, self.dt_projs_bias,
-            self.A_logs, self.Ds, 
-            out_norm=getattr(self, "out_norm", None),
-            force_fp32=force_fp32, h_norm=self.h_norm,
-        )
-        return x
-    
-    def forward(self, x: torch.Tensor, **kwargs):
-        x = self.in_proj(x)
-        x, z = x.chunk(2, dim=-1) # (b, h, w, d)
-        z = self.act(z)
-        if self.d_conv > 0:
-            x = x.permute(0, 3, 1, 2).contiguous()
-            x = self.conv2d(x) # (b, d, h, w)
-        x = self.act(x)
-        y = self.forward_core(x, channel_first=(self.d_conv > 1))
-        y = y * z
-        out = self.dropout(self.out_proj(y))
-        return out
-
-
+# 双时相3D扫描 0919
 class Tree_SSM3D(nn.Module):
     def __init__(
             self,
@@ -888,11 +461,11 @@ class Tree_SSM3D(nn.Module):
         out = self.dropout(self.out_proj(y))
         return out
 
+# 用于时序SCD的3D scanning
 class MTTree_SSM3D(nn.Module):
     def __init__(
             self,
             # basic dims ===========
-            Tem=3,
             d_model=96,
             d_state=16,
             ssm_ratio=2.0,
@@ -923,7 +496,6 @@ class MTTree_SSM3D(nn.Module):
         self.dt_rank = math.ceil(d_model / 16) if dt_rank == "auto" else dt_rank
         self.d_state = math.ceil(d_model / 6) if d_state == "auto" else d_state
         self.d_conv = d_conv
-
         self.out_norm = nn.LayerNorm(d_inner)
         self.h_norm = nn.LayerNorm(d_inner)
 
@@ -1037,7 +609,7 @@ class MTTree_SSM3D(nn.Module):
             x, self.x_proj_weight, None, self.dt_projs_weight, self.dt_projs_bias,
             self.A_logs, self.Ds,
             out_norm=getattr(self, "out_norm", None),
-            force_fp32=force_fp32, h_norm=self.h_norm,
+            force_fp32=force_fp32, h_norm=self.h_norm
         )
         return x
 
