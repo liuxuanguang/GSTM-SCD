@@ -19,14 +19,14 @@ In the following, we summarize the processed semantic change detection data set 
 
 #### Vision Tasks
 ```txt
-conda create -n grootv python=3.9
-conda activate grootv
+conda create -n GSTM-SCD python=3.10
+conda activate GSTM-SCD
 
 # Install pytorch 
-pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
+pip install torch==2.1.1+cu118 torchvision==0.16.1+cu118 torchaudio==2.1.1 --extra-index-url https://download.pytorch.org/whl/cu118
 
 # Install other packages
-pip install -r GrootV/grootv_requirements.txt 
+pip install -r requirements.txt 
 
 # Install Vision_Tree_Scanning
 cd GrootV/third-party/TreeScan
@@ -70,7 +70,8 @@ pip install -v -e .
    * Find line 40 and line 35 in [inference_SECOND.py](https://github.com/IceStreams/EGMS-Net/blob/main/inference_SECOND.py), change `--data_root` to your local dataset directory
 
 3. Training
-   
+   * if you train and inference the triple-temporal SCD tasks, you need to change as follows:
+   * GSTM-SCD-tiny: 
    python train_second.py
 
 5. Inference and evaluation
