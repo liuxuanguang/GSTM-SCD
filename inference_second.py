@@ -1,30 +1,11 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import numpy as np
 import PIL.Image as Image
 from datasets.change_detection import ChangeDetection_SECOND
-# from models.proposed_BiGrootV import BiGrootV_V2 as Net
-# from models.proposed_BiGrootV import BiGrootV_base as Net
-# from models.proposed_V1 import BiGrootV as Net
-# from models.proposed_BiGrootV import BiGrootV_V5Base as Net
-# from models.proposed_BiGrootV import BiGrootV_V5 as Net
-# from EGMSNet import EGMSNet as Net
-# from models.proposed_BiGrootV import BiGrootV3D_V2 as Net
-# from models.BiSRNet import BiSRNet as Net
-# from models.proposed_BiGrootV import BiGrootV3D_SV3_SD as Net
-# from models.proposed_BiGrootV import BiGrootV3D_SV3_small as Net
-# from models.proposed_BiGrootV import BiGrootV_base as Net
-# from models.BiSRNet import BiSRNet as Net
 from models.FEMCD.FEMCD import FEMCD_net_SECOND as Net
-# from models.TED import TED as Net
-# from models.MCD.MCD import MCD_net_SECOND as Net
-# from models.SCanNet import SCanNet as Net
-# from models.SSCDl import SSCDl as Net
-# from models.HRSCD_str4 import HRSCD_str4 as Net
 from utils.palette import color_map
 from utils.metric import IOUandSek
-
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from thop import profile
