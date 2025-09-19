@@ -1,13 +1,5 @@
 import datasets.MultiSiamese_RS_ST_TL as RS
-from models.proposed_MTGrootV3D import MTGrootV3D_SV3_WUSU as Net
-# from models.FEMCD.FEMCD import FEMCD_net as Net
-# from models.BiSRNet import BiSRNet_MT as Net
-# from models.EGMSNet import EGMSNet_MT as Net
-# from models.TED import TED_MT as Net
-# from models.HRSCD_str4 import HRSCD_str4_MT as Net
-# from models.SSCDl import SSCDl_MT as Net
-# from models.SCanNet import SCanNet_MT as Net
-# from models.HRSCD_str3 import HRSCD_str3_MT as Net
+from models.GSTMSCD_MTSCD import GSTMSCD_WUSU as Net
 from utils.palette import color_map
 from utils.metric import IOUandSek
 from utils.loss import ChangeSimilarity, DiceLoss
@@ -23,12 +15,8 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 working_path = os.path.dirname(os.path.abspath(__file__))
 torch.manual_seed(42)
-
-
-
 
 class TemporalLogicKLDivLoss(nn.Module):
     def __init__(self,
@@ -132,15 +120,13 @@ class Options:
     def __init__(self):
         parser = argparse.ArgumentParser('Semantic Change Detection')
         parser.add_argument("--data_name", type=str, default=r"WUSU")
-        parser.add_argument("--Net_name", type=str, default="GSTMSCD-6AM")
-        parser.add_argument("--backbone", type=str, default="resnet34")
-        parser.add_argument("--data_root", type=str, default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/wusu512_process/NweWUSU")
-        # parser.add_argument("--data_root", type=str, default=r"/media/lenovo/文档/Long-term-SCD/wusu512_process/debug_data")
-
+        parser.add_argument("--Net_name", type=str, default="GSTMSCD")
+        parser.add_argument("--backbone", type=str, default="GOST-Mamba")
+        parser.add_argument("--data_root", type=str, default=r"/WUSU")
         parser.add_argument("--log_dir", type=str)
-        parser.add_argument("--batch_size", type=int, default=2)
-        parser.add_argument("--val_batch_size", type=int, default=2)
-        parser.add_argument("--test_batch_size", type=int, default=2)
+        parser.add_argument("--batch_size", type=int, default=4)
+        parser.add_argument("--val_batch_size", type=int, default=4)
+        parser.add_argument("--test_batch_size", type=int, default=4)
         parser.add_argument("--epochs", type=int, default=100)
         parser.add_argument("--lr", type=float, default=0.0005)
         parser.add_argument("--weight_decay", type=float, default=1e-4)
