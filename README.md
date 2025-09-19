@@ -70,19 +70,18 @@ pip install -v -e .
    * Find line 40 and line 35 in [inference_SECOND.py](https://github.com/IceStreams/EGMS-Net/blob/main/inference_SECOND.py), change `--data_root` to your local dataset directory
 
 3. Training
-   * if you train and inference the triple-temporal SCD tasks, you need to change as follows:
-   * GSTM-SCD-tiny: 
-   python train_second.py
+   * If you train and inference the GSTM-SCD on the WUSU dataset (triple-temporal SCD), you need to change as follows:
+   * Find line 137 in [GrootV/classification/models/tree_scan_utils/tree_scan_core.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/GrootV/classification/models/tree_scan_utils/tree_scan_core.py), change 'def __init__(self, distance_func, mapping_func=None, Tem=None):' to 'def __init__(self, distance_func, mapping_func=None, Tem=3):'
+   * Find line 348 in [GrootV/classification/models/tree_scan_utils/tree_scan_core.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/GrootV/classification/models/tree_scan_utils/tree_scan_core.py), change 'index = self._build_matrix_index(guide_in, None)' to 'index = self._build_matrix_index(guide_in, 3):'
+   * If you train and inference the GSTM-SCD on the DynamicEarthNet dataset, you need to change as follows:
+   * Find line 137 in [GrootV/classification/models/tree_scan_utils/tree_scan_core.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/GrootV/classification/models/tree_scan_utils/tree_scan_core.py), change 'def __init__(self, distance_func, mapping_func=None, Tem=None):' to 'def __init__(self, distance_func, mapping_func=None, Tem=6):'
+   * Find line 348 in [GrootV/classification/models/tree_scan_utils/tree_scan_core.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/GrootV/classification/models/tree_scan_utils/tree_scan_core.py), change 'index = self._build_matrix_index(guide_in, None)' to 'index = self._build_matrix_index(guide_in, 6):'
+
+   * python train_***.py
 
 5. Inference and evaluation
    
    python inference_second.py
-
-## Pretrained Models
-
-The reproducible weights of EGMS-Net on the three benchmark datasets are visible in the links below:
-
-[Baidu](https://pan.baidu.com/s/1NGFO1pVdEHfOF4YGOvDfmA?pwd=h9kp)
 
 ## Cite GSTM-SCD
 
