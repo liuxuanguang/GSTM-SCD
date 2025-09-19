@@ -1,4 +1,3 @@
-# import nnunetv2.nets.SwinUMamba
 from models.Backbones.resnet import resnet18, resnet34, resnet50
 from models.Decoders.Decoder import Seg_Decoder, CD_Decoder, Seg_Decoder_ResNet, CD_Decoder_ResNet
 from models.Modules.CIGM import CIGM
