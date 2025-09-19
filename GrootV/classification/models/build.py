@@ -1,10 +1,10 @@
-from .grootv import GrootV
+from .grootv import GOST_Mamba_bi
 
 
 def build_model(config):
     model_type = config.MODEL.TYPE
     if model_type == 'grootv':
-        model = GrootV(
+        model = GOST_Mamba_bi(
             num_classes=config.MODEL.NUM_CLASSES,
             channels=config.MODEL.GROOTV.CHANNELS,
             depths=config.MODEL.GROOTV.DEPTHS,
