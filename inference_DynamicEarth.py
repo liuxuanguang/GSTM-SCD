@@ -31,13 +31,13 @@ class Options:
     def __init__(self):
         parser = argparse.ArgumentParser('Semantic Change Detection')
         parser.add_argument("--data_name", type=str, default="DynamicEarth")
-        parser.add_argument("--Net_name", type=str, default="HRSCD.str4-16")
+        parser.add_argument("--Net_name", type=str, default="models_name")
         parser.add_argument("--lightweight", dest="lightweight", action="store_true",
                            help='lightweight head for fewer parameters and faster speed')
         parser.add_argument("--backbone", type=str, default="resnet34")
-        parser.add_argument("--data_root", type=str, default=r"/media/lenovo/课题研究/博士小论文数据/语义变化检测数据集/DynamicEarthNet_process/train/DynamicEarth512/test")
+        parser.add_argument("--data_root", type=str, default=r"datsest_path")
         parser.add_argument("--load_from", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/checkpoints/DynamicEarth/HRSCD.str4_epoch91_Score21.03_mIOU59.90_Sek4.37_Fscd45.11_OA82.01.pth")
+                            default=r"best_model.pth")
         parser.add_argument("--test_batch_size", type=int, default=8)
         parser.add_argument("--pretrained", type=bool, default=True,
                            help='initialize the backbone with pretrained parameters')
