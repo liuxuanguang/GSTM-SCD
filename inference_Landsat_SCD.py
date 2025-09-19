@@ -3,7 +3,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import numpy as np
 import PIL.Image as Image
-
 from datasets.change_detection import ChangeDetection_Landsat_SCD
 # from models.proposed_BiGrootV import BiGrootV_V5 as Net
 # from models.proposed_BiGrootV import BiGrootV_V5Base as Net
@@ -26,13 +25,13 @@ class Options:
     def __init__(self):
         parser = argparse.ArgumentParser('Semantic Change Detection')
         parser.add_argument("--data_name", type=str, default="Landsat_SCD")
-        parser.add_argument("--Net_name", type=str, default="HRSCD.str4")
+        parser.add_argument("--Net_name", type=str, default="model_name")
         parser.add_argument("--lightweight", dest="lightweight", action="store_true",
                            help='lightweight head for fewer parameters and faster speed')
         parser.add_argument("--backbone", type=str, default="resnet34")
-        parser.add_argument("--data_root", type=str, default=r"/media/lenovo/课题研究/博士小论文数据/语义变化检测数据集/Landsat-SCD")
+        parser.add_argument("--data_root", type=str, default=r"/Landsat-SCD")
         parser.add_argument("--load_from", type=str,
-                            default=r"/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/checkpoints/Landsat_SCD/HRSCD.str4-epoch18_Score48.43_mIOU83.05_Sek33.60_Fscd71.61_OA91.71.pth")
+                            default=r"best_model.pth")
         parser.add_argument("--test_batch_size", type=int, default=4)
         parser.add_argument("--pretrained", type=bool, default=True,
                            help='initialize the backbone with pretrained parameters')
