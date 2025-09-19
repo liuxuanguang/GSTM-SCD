@@ -6,10 +6,9 @@ from models.Modules.CIEM import CIEM
 import torch
 from torch import nn
 import torch.nn.functional as F
-from vmamba import VSSM, LayerNorm2d, VSSBlock, Permute
 from utils.misc import initialize_weights
-from models.testing_reorder import feature_resortV2, feature_resumption
-from GrootV.classification.models.grootv import GrootVLayer, GrootV3DLayer, GrootV, GrootV_3D
+from GrootV.classification.models.grootv import STM3DLayer, GOST_Mamba_bi
+
 def get_backbone(backbone, pretrained):
     if backbone == 'resnet18':
         backbone = resnet18(pretrained)
@@ -35,34 +34,8 @@ def conv3x3_dw(in_channel,out_channel,stride=1):
     )
 
 class ResBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(ResBlock, self).__init__()
-        self.conv1 = conv3x3_dw(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3_dw(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        identity = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        if self.downsample is not None:
-            identity = self.downsample(x)
-        out += identity
-        out = self.relu(out)
-        return out
-
-class ResBlock1(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1, downsample=None):
-            super(ResBlock1, self).__init__()
+            super(ResBlock, self).__init__()
             self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
             self.bn1 = nn.BatchNorm2d(out_channels)
             self.relu = nn.ReLU(inplace=True)
@@ -72,33 +45,27 @@ class ResBlock1(nn.Module):
 
     def forward(self, x):
             identity = x
-
             out = self.conv1(x)
             out = self.bn1(out)
             out = self.relu(out)
-
             out = self.conv2(out)
             out = self.bn2(out)
-
             if self.downsample is not None:
                 identity = self.downsample(x)
-
             out += identity
             out = self.relu(out)
-
             return out
 
-
-#使用TSSCS
-class STM_GrootV3D_V2(nn.Module):
+#TSSCS
+class TSSCS_bi(nn.Module):
     def __init__(self, inchannel, channel_first):
-        super(STM_GrootV3D_V2, self).__init__()
+        super(TSSCS_bi, self).__init__()
         self.inchannel = inchannel
         self.channel_first = channel_first
-        self.conv2 = nn.Conv2d(kernel_size=1, in_channels=768, out_channels=128)
-        self.GrootV_S1 = GrootV3DLayer(channels=128)
-        self.smooth_layer_x = ResBlock1(in_channels=128, out_channels=128, stride=1)
-        self.smooth_layer_y = ResBlock1(in_channels=128, out_channels=128, stride=1)
+        self.conv2 = nn.Conv2d(kernel_size=1, in_channels=self.inchannel, out_channels=128)
+        self.GrootV_S1 = STM3DLayer(channels=128)
+        self.smooth_layer_x = ResBlock(in_channels=128, out_channels=128, stride=1)
+        self.smooth_layer_y = ResBlock(in_channels=128, out_channels=128, stride=1)
     def forward(self, x, y):
         B, C, H, W = x.size()
 
@@ -120,16 +87,17 @@ class STM_GrootV3D_V2(nn.Module):
         return xf_sm, yf_sm
 
 # Proposed GSTM-SCD for bi-temporal SCD tasks
-class BiGrootV3D_SV3_tiny(nn.Module):
-    def __init__(self, backbone, pretrained, nclass, lightweight, M, Lambda):
-        super(BiGrootV3D_SV3_tiny, self).__init__()
+class GSTMSCD_Bitemporal_tiny(nn.Module):
+    def __init__(self, backbone, pretrained, nclass, lightweight, M, Lambda, first_channel, depths):
+        super(GSTMSCD_Bitemporal_tiny, self).__init__()
         self.backbone_name = backbone
         self.nclass = nclass
         self.lightweight = lightweight
         self.M = M
         self.Lambda = Lambda
-        self.backbone = GrootV_3D(depths=[2, 2, 9, 2])
-
+        self.first_channel = first_channel
+        self.depths = depths
+        self.backbone = GOST_Mamba_bi(channels=self.first_channel, depths=self.depths)
         if backbone == "resnet18" or backbone == "resnet34" or backbone == "GOST-Mamba":
             self.channel_nums = [80, 160, 320, 640, 128]
         elif backbone == "resnet50":
@@ -148,7 +116,7 @@ class BiGrootV3D_SV3_tiny(nn.Module):
         self.CFEM_3 = CIEM(self.channel_nums[3], self.channel_nums[3], self.Lambda)
         self.CFEM_4 = CIEM(self.channel_nums[4], self.channel_nums[4], self.Lambda)
         self.CFEM = [self.CFEM_0, self.CFEM_1, self.CFEM_2, self.CFEM_3, self.CFEM_4]
-        self.MambaLayer = STM_GrootV3D_V2(640, False)
+        self.MambaLayer = TSSCS_bi(self.channel_nums[3], False)
         self.seg_conv = nn.Sequential(
             nn.Conv2d(256, 128, 3, padding=1),
             nn.BatchNorm2d(128),
@@ -161,8 +129,9 @@ class BiGrootV3D_SV3_tiny(nn.Module):
         self.classifierCD = nn.Sequential(nn.Conv2d(256, 64, kernel_size=1), nn.BatchNorm2d(64), nn.ReLU(), nn.Dropout(),
                                           nn.Conv2d(64, 1, kernel_size=1))
         updated_weights = {}
-        pretrained_weights = torch.load('./grootv_cls_tiny.pth')
+        pretrained_weights = torch.load('/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/grootv_cls_tiny.pth')
         new_dict = pretrained_weights['model']
+        old_dict = self.backbone.state_dict
         print(pretrained_weights)
         for key, value in new_dict.items():
             if key.startswith(('patch_embed.', 'levels.')):
@@ -236,15 +205,17 @@ class BiGrootV3D_SV3_tiny(nn.Module):
         return seg1, seg2, change.squeeze(1)
 
 
-class BiGrootV3D_SV3_small(nn.Module):
-    def __init__(self, backbone, pretrained, nclass, lightweight, M, Lambda):
-        super(BiGrootV3D_SV3_small, self).__init__()
+class GSTMSCD_Bitemporal_samll(nn.Module):
+    def __init__(self, backbone, pretrained, nclass, lightweight, M, Lambda, first_channel, depths):
+        super(GSTMSCD_Bitemporal_samll, self).__init__()
         self.backbone_name = backbone
         self.nclass = nclass
         self.lightweight = lightweight
         self.M = M
         self.Lambda = Lambda
-        self.backbone = GrootV_3D(depths=[2, 2, 13, 2])
+        self.first_channel = first_channel
+        self.depths = depths
+        self.backbone = GOST_Mamba_bi(depths=self.depths, channels=self.first_channel)
 
         if backbone == "resnet18" or backbone == "resnet34" or backbone == "GOST-Mamba":
             self.channel_nums = [96, 192, 384, 768, 128]
@@ -265,7 +236,7 @@ class BiGrootV3D_SV3_small(nn.Module):
         self.CFEM_3 = CIEM(self.channel_nums[3], self.channel_nums[3], self.Lambda)
         self.CFEM_4 = CIEM(self.channel_nums[4], self.channel_nums[4], self.Lambda)
         self.CFEM = [self.CFEM_0, self.CFEM_1, self.CFEM_2, self.CFEM_3, self.CFEM_4]
-        self.MambaLayer = STM_GrootV3D_V2(768, False)
+        self.MambaLayer = TSSCS_bi(self.channel_nums[3], False)
         self.seg_conv = nn.Sequential(
             nn.Conv2d(256, 128, 3, padding=1),
             nn.BatchNorm2d(128),
@@ -278,7 +249,7 @@ class BiGrootV3D_SV3_small(nn.Module):
         self.classifierCD = nn.Sequential(nn.Conv2d(256, 64, kernel_size=1), nn.BatchNorm2d(64), nn.ReLU(), nn.Dropout(),
                                           nn.Conv2d(64, 1, kernel_size=1))
         updated_weights = {}
-        pretrained_weights = torch.load('./grootv_cls_small.pth')
+        pretrained_weights = torch.load('/media/lenovo/课题研究/博士小论文数据/长时序变化检测/Long-term-SCD/CMSCD_lxg/grootv_cls_small.pth')
         new_dict = pretrained_weights['model']
         print(pretrained_weights)
         for key, value in new_dict.items():
@@ -353,7 +324,7 @@ class BiGrootV3D_SV3_small(nn.Module):
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = BiGrootV3D_SV3_small(backbone='GOST-Mamba', pretrained=True, nclass=7, lightweight=True, M=6, Lambda=0.00005).to(device)
+    model = GSTMSCD_Bitemporal_samll(backbone='GOST-Mamba', pretrained=True, nclass=7, lightweight=True, M=6, Lambda=0.00005, first_channel=96, depths=[2, 2, 13, 2]).to(device)
     image1 = torch.randn(1, 3, 512, 512).to(device)
     image2 = torch.randn(1, 3, 512, 512).to(device)
     seg1, seg2, change = model(image1, image2)
