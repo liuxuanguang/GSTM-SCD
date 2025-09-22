@@ -15,6 +15,10 @@ In the following, we summarize the processed semantic change detection data set 
 * [WUSU (Baidu)](https://pan.baidu.com/s/1wDfVPU5bKpujBAZQTKpdYg?pwd=pxhq)
 * [DynamicEarthNet (Baidu)](https://pan.baidu.com/s/1KekpsM2OXuXqeFy4pOv_XA?pwd=yfyg)
 
+## Pretraining-weights Download
+* [Download the Pretraining-weights of GSTM-SCD (Baidu)](https://pan.baidu.com/s/1_1GvZO4jv9lXDmWdBBQUMA?pwd=np27)
+* Find line 131 in [models/GSTM_SCD_BiSCD.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/models/GSTM_SCD_BiSCD.py), change the path of pre-training weights. 
+
 ## 🛠️ Environment Setup (Refer to https://bgithub.xyz/EasonXiao-888/MambaTree/edit/main/README.md)
 
 #### Vision Tasks
@@ -76,7 +80,6 @@ pip install -v -e .
    * If you train and inference the GSTM-SCD on the DynamicEarthNet dataset, you need to change as follows:
    * Find line 137 in [GrootV/classification/models/tree_scan_utils/tree_scan_core.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/GrootV/classification/models/tree_scan_utils/tree_scan_core.py), change 'def __init__(self, distance_func, mapping_func=None, Tem=None):' to 'def __init__(self, distance_func, mapping_func=None, Tem=6):'
    * Find line 348 in [GrootV/classification/models/tree_scan_utils/tree_scan_core.py](https://bgithub.xyz/liuxuanguang/GSTM-SCD/blob/main/GrootV/classification/models/tree_scan_utils/tree_scan_core.py), change 'index = self._build_matrix_index(guide_in, None)' to 'index = self._build_matrix_index(guide_in, 6):'
-
    * python train_***.py
 
 5. Inference and evaluation
