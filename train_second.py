@@ -6,7 +6,7 @@ from datasets.change_detection import ChangeDetection_SECOND
 # from models.proposed_V1 import BiMambaV2 as Net
 # from models.proposed_BiGrootV import BiGrootV3D_V2 as Net
 # from models.proposed_BiGrootV import BiGrootV3D_SV3 as Net
-from models.proposed_BiGrootV import BiGrootV3D_SV3_small as Net
+from models.GSTM_SCD_BiSCD import GSTMSCD_Bitemporal_tiny as Net
 # from models.proposed_BiGrootV import SB_Mmaba_SCD as Net
 # from models.SB_base_SCD import SB_Base_SCD as Net
 # from models.proposed_BiGrootV import BiGrootV3D_SV3_SD as Net
